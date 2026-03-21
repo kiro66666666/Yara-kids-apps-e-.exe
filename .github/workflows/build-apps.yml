@@ -64,6 +64,11 @@ jobs:
         working-directory: mobile-wrapper
         run: npm install
 
+      - name: Install ImageMagick
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick
+
       - name: Generate Android platform
         working-directory: mobile-wrapper
         run: npx cap add android
@@ -71,6 +76,20 @@ jobs:
       - name: Sync Capacitor Android project
         working-directory: mobile-wrapper
         run: npx cap sync android
+
+      - name: Apply site favicon to Android launcher icons
+        run: |
+          curl -L https://yara-kids-b48ed.web.app/favicon.ico -o mobile-wrapper/site-favicon.ico
+          convert mobile-wrapper/site-favicon.ico[0] -resize 48x48 mobile-wrapper/android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+          convert mobile-wrapper/site-favicon.ico[0] -resize 72x72 mobile-wrapper/android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+          convert mobile-wrapper/site-favicon.ico[0] -resize 96x96 mobile-wrapper/android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          convert mobile-wrapper/site-favicon.ico[0] -resize 144x144 mobile-wrapper/android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          convert mobile-wrapper/site-favicon.ico[0] -resize 192x192 mobile-wrapper/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          cp mobile-wrapper/android/app/src/main/res/mipmap-mdpi/ic_launcher.png mobile-wrapper/android/app/src/main/res/mipmap-mdpi/ic_launcher_round.png
+          cp mobile-wrapper/android/app/src/main/res/mipmap-hdpi/ic_launcher.png mobile-wrapper/android/app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+          cp mobile-wrapper/android/app/src/main/res/mipmap-xhdpi/ic_launcher.png mobile-wrapper/android/app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
+          cp mobile-wrapper/android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png mobile-wrapper/android/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
+          cp mobile-wrapper/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png mobile-wrapper/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
 
       - name: Build Android APK
         working-directory: mobile-wrapper/android
