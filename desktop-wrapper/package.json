@@ -1,0 +1,42 @@
+{
+  "name": "yara-kids-desktop-wrapper",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Electron wrapper for the YARA Kids production site.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:prepare": "node scripts/fetch-site-favicon.mjs",
+    "build": "npm run build:prepare && electron-builder --publish never --win portable nsis"
+  },
+  "build": {
+    "appId": "com.yarakids.desktop",
+    "productName": "YARA Kids",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json",
+      "scripts/**/*",
+      "assets/**/*"
+    ],
+    "win": {
+      "target": [
+        "portable",
+        "nsis"
+      ],
+      "artifactName": "YARA-Kids-${version}.${ext}",
+      "icon": "assets/icon.ico"
+    },
+    "icon": "assets/icon.ico"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^26.0.12",
+    "png-to-ico": "^2.1.8",
+    "sharp": "^0.34.2"
+  },
+  "author": "YARA Kids"
+}

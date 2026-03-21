@@ -1,0 +1,10 @@
+{
+  "appId": "com.yarakids.mobile",
+  "appName": "YARA Kids",
+  "webDir": "www",
+  "server": {
+    "url": "https://yara-kids-b48ed.web.app/",
+    "cleartext": false,
+    "androidScheme": "https"
+  }
+}

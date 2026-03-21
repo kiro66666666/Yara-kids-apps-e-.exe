@@ -1,0 +1,118 @@
+name: Build Native Wrappers
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build Electron Windows Wrapper
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install desktop dependencies
+        working-directory: desktop-wrapper
+        run: npm install
+
+      - name: Build Windows artifacts
+        working-directory: desktop-wrapper
+        run: npm run build
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-wrapper
+          path: desktop-wrapper/dist/*
+          if-no-files-found: error
+
+  build-android:
+    name: Build Capacitor Android Wrapper
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install mobile dependencies
+        working-directory: mobile-wrapper
+        run: npm install
+
+      - name: Generate Android platform
+        working-directory: mobile-wrapper
+        run: npx cap add android
+
+      - name: Sync Capacitor Android project
+        working-directory: mobile-wrapper
+        run: npx cap sync android
+
+      - name: Apply site icon to Android launcher icons
+        working-directory: mobile-wrapper
+        run: npm run apply:site-icon
+
+      - name: Build Android APK
+        working-directory: mobile-wrapper/android
+        run: ./gradlew assembleDebug
+
+      - name: Upload Android artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-wrapper
+          path: mobile-wrapper/android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs:
+      - build-windows
+      - build-android
+
+    steps:
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-wrapper
+          path: release-assets/windows
+
+      - name: Download Android artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: android-wrapper
+          path: release-assets/android
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: native-wrapper-build-${{ github.run_number }}
+          name: Native Wrapper Build ${{ github.run_number }}
+          generate_release_notes: true
+          files: |
+            release-assets/windows/*
+            release-assets/android/*
