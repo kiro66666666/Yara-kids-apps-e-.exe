@@ -1,0 +1,15 @@
+{
+  "name": "yara-kids-mobile-wrapper",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Capacitor wrapper for the YARA Kids production site.",
+  "scripts": {
+    "cap:add:android": "cap add android",
+    "cap:sync": "cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.1.0",
+    "@capacitor/cli": "^7.1.0",
+    "@capacitor/core": "^7.1.0"
+  }
+}
