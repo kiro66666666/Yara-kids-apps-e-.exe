@@ -5,21 +5,13 @@
   "description": "Capacitor wrapper for the YARA Kids production site.",
   "scripts": {
     "cap:add:android": "cap add android",
-<<<<<<< HEAD
     "cap:sync": "cap sync android",
     "apply:site-icon": "node scripts/apply-site-icon.mjs"
-=======
-    "cap:sync": "cap sync android"
->>>>>>> origin/main
   },
   "dependencies": {
     "@capacitor/android": "^7.1.0",
     "@capacitor/cli": "^7.1.0",
-<<<<<<< HEAD
     "@capacitor/core": "^7.1.0",
     "sharp": "^0.34.2"
-=======
-    "@capacitor/core": "^7.1.0"
->>>>>>> origin/main
   }
 }

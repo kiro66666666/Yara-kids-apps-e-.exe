@@ -24,14 +24,12 @@ async function fetchBuffer(url) {
 
 function extractIconHref(html) {
   const regex = /<link[^>]+rel=["'][^"']*icon[^"']*["'][^>]+href=["']([^"']+)["']/i;
-  const match = html.match(regex);
-  if (!match) throw new Error('Could not find a favicon link in site HTML');
-  return match[1];
+  return html.match(regex)?.[1] || null;
 }
 
 async function main() {
   const homeBuffer = await fetchBuffer(SITE_URL);
-  const iconHref = extractIconHref(homeBuffer.toString('utf8'));
+  const iconHref = extractIconHref(homeBuffer.toString('utf8')) || '/favicon.ico';
   const iconUrl = new URL(iconHref, SITE_URL).toString();
   const iconBuffer = await fetchBuffer(iconUrl);
 

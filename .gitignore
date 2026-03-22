@@ -1,0 +1,5 @@
+desktop-wrapper/assets/
+desktop-wrapper/dist/
+desktop-wrapper/node_modules/
+mobile-wrapper/android/
+mobile-wrapper/node_modules/

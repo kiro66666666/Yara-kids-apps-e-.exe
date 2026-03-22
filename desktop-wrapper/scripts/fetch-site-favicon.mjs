@@ -1,6 +1,5 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
-<<<<<<< HEAD
-import { dirname, extname, resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import pngToIco from 'png-to-ico';
@@ -22,17 +21,15 @@ async function fetchBuffer(url) {
 
 function extractIconHref(html) {
   const regex = /<link[^>]+rel=["'][^"']*icon[^"']*["'][^>]+href=["']([^"']+)["']/i;
-  const match = html.match(regex);
-  if (!match) throw new Error('Could not find a favicon link in site HTML');
-  return match[1];
+  return html.match(regex)?.[1] || null;
 }
 
 async function main() {
   mkdirSync(assetsDir, { recursive: true });
 
-  const home = await fetch(SITE_URL);
+  const home = await fetchBuffer(SITE_URL);
   const html = home.buffer.toString('utf8');
-  const iconHref = extractIconHref(html);
+  const iconHref = extractIconHref(html) || '/favicon.ico';
   const iconUrl = new URL(iconHref, SITE_URL).toString();
   const { buffer } = await fetchBuffer(iconUrl);
 
@@ -43,7 +40,7 @@ async function main() {
 
   writeFileSync(iconPngPath, pngBuffer);
   writeFileSync(iconIcoPath, await pngToIco(pngBuffer));
-  console.log(`Resolved site icon ${iconUrl}${extname(iconUrl) ? '' : ''}`);
+  console.log(`Resolved site icon ${iconUrl}`);
   console.log(`Generated ${iconPngPath} and ${iconIcoPath}`);
 }
 
@@ -51,31 +48,3 @@ main().catch((error) => {
   console.error(error);
   process.exit(1);
 });
-=======
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import https from 'node:https';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const iconUrl = 'https://yara-kids-b48ed.web.app/favicon.ico';
-const iconPath = resolve(__dirname, '../assets/icon.ico');
-
-mkdirSync(resolve(__dirname, '../assets'), { recursive: true });
-
-https
-  .get(iconUrl, (response) => {
-    if (response.statusCode !== 200) {
-      throw new Error(`Failed to download favicon: ${response.statusCode}`);
-    }
-
-    const chunks = [];
-    response.on('data', (chunk) => chunks.push(chunk));
-    response.on('end', () => {
-      writeFileSync(iconPath, Buffer.concat(chunks));
-      console.log(`Downloaded site favicon to ${iconPath}`);
-    });
-  })
-  .on('error', (error) => {
-    throw error;
-  });
->>>>>>> origin/main

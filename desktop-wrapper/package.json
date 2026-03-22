@@ -34,16 +34,9 @@
   },
   "devDependencies": {
     "electron": "^35.0.0",
-<<<<<<< HEAD
     "electron-builder": "^26.0.12",
     "png-to-ico": "^2.1.8",
     "sharp": "^0.34.2"
   },
   "author": "YARA Kids"
 }
-=======
-    "electron-builder": "^26.0.12"
-  },
-  "author": "YARA Kids"
-}
->>>>>>> origin/main
