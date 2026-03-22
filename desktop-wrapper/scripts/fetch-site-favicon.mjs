@@ -19,9 +19,16 @@ async function fetchBuffer(url) {
   };
 }
 
-function extractIconHref(html) {
-  const regex = /<link[^>]+rel=["'][^"']*icon[^"']*["'][^>]+href=["']([^"']+)["']/i;
-  return html.match(regex)?.[1] || null;
+function extractPreferredIconHref(html) {
+  const appleTouchMatch = html.match(/<link[^>]+rel=["'][^"']*apple-touch-icon[^"']*["'][^>]+href=["']([^"']+)["']/i);
+  if (appleTouchMatch?.[1]) return appleTouchMatch[1];
+
+  const iconMatches = [...html.matchAll(/<link[^>]+rel=["'][^"']*icon[^"']*["'][^>]+href=["']([^"']+)["']/gi)]
+    .map((match) => match[1])
+    .filter(Boolean);
+
+  const preferredRaster = iconMatches.find((href) => /\.(png|webp)(\?|$)/i.test(href));
+  return preferredRaster || iconMatches[0] || null;
 }
 
 async function main() {
@@ -29,7 +36,7 @@ async function main() {
 
   const home = await fetchBuffer(SITE_URL);
   const html = home.buffer.toString('utf8');
-  const iconHref = extractIconHref(html) || '/favicon.ico';
+  const iconHref = extractPreferredIconHref(html) || '/icon-192.png';
   const iconUrl = new URL(iconHref, SITE_URL).toString();
   const { buffer } = await fetchBuffer(iconUrl);
 
