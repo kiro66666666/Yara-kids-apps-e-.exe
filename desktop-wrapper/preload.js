@@ -1,3 +1,6 @@
-window.addEventListener('DOMContentLoaded', () => {
-  // Reserved for future native-to-web bridge integrations.
+const { contextBridge } = require('electron');
+
+contextBridge.exposeInMainWorld('yaraKidsNative', {
+  platform: 'windows-desktop',
+  wrapper: 'electron'
 });

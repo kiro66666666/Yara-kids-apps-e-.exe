@@ -9,6 +9,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const assetsDir = resolve(__dirname, '../assets');
 const iconPngPath = resolve(assetsDir, 'icon.png');
 const iconIcoPath = resolve(assetsDir, 'icon.ico');
+const brandingJsonPath = resolve(assetsDir, 'branding.json');
 
 async function fetchBuffer(url) {
   const response = await fetch(url);
@@ -59,11 +60,28 @@ function pickLargestManifestIcon(manifestJson) {
   return scoredIcons[0]?.src || null;
 }
 
+function extractTagContent(html, pattern) {
+  return html.match(pattern)?.[1]?.trim() || null;
+}
+
+function extractTitle(html) {
+  return extractTagContent(html, /<title>([^<]+)<\/title>/i);
+}
+
+function extractDefaultBranding(html) {
+  return {
+    logoUrl: extractTagContent(html, /logoUrl:\s*['"]([^'"]+)['"]/i),
+    faviconUrl: extractTagContent(html, /faviconUrl:\s*['"]([^'"]+)['"]/i),
+    appIconUrl: extractTagContent(html, /appIconUrl:\s*['"]([^'"]+)['"]/i)
+  };
+}
+
 async function main() {
   mkdirSync(assetsDir, { recursive: true });
 
   const home = await fetchBuffer(SITE_URL);
   const html = home.buffer.toString('utf8');
+  const defaultBranding = extractDefaultBranding(html);
   let iconHref = null;
 
   const manifestHref = extractManifestHref(html);
@@ -87,10 +105,29 @@ async function main() {
     .png()
     .toBuffer();
 
+  const branding = {
+    title:
+      extractTagContent(html, /<meta[^>]+name=["']apple-mobile-web-app-title["'][^>]+content=["']([^"']+)["']/i) ||
+      extractTitle(html) ||
+      'YARA Kids',
+    description:
+      extractTagContent(html, /<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i) ||
+      'Moda infantil com amor e conforto.',
+    themeColor:
+      extractTagContent(html, /<meta[^>]+name=["']theme-color["'][^>]+content=["']([^"']+)["']/i) ||
+      '#ff69b4',
+    iconUrl,
+    faviconUrl: new URL(defaultBranding.faviconUrl || iconHref, SITE_URL).toString(),
+    logoUrl: defaultBranding.logoUrl ? new URL(defaultBranding.logoUrl, SITE_URL).toString() : null,
+    siteUrl: SITE_URL
+  };
+
   writeFileSync(iconPngPath, pngBuffer);
   writeFileSync(iconIcoPath, await pngToIco(pngBuffer));
+  writeFileSync(brandingJsonPath, `${JSON.stringify(branding, null, 2)}\n`);
   console.log(`Resolved site icon ${iconUrl}`);
   console.log(`Generated ${iconPngPath} and ${iconIcoPath}`);
+  console.log(`Saved branding metadata to ${brandingJsonPath}`);
 }
 
 main().catch((error) => {

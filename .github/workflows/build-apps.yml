@@ -72,6 +72,10 @@ jobs:
         working-directory: mobile-wrapper
         run: npx cap sync android
 
+      - name: Apply Android version metadata
+        working-directory: mobile-wrapper
+        run: npm run prepare:android
+
       - name: Apply site icon to Android launcher icons
         working-directory: mobile-wrapper
         run: npm run apply:site-icon
@@ -80,11 +84,17 @@ jobs:
         working-directory: mobile-wrapper/android
         run: ./gradlew assembleDebug
 
+      - name: Rename Android APK for release
+        run: |
+          mkdir -p release-assets/android
+          VERSION=$(node -p "require('./mobile-wrapper/package.json').version")
+          cp mobile-wrapper/android/app/build/outputs/apk/debug/app-debug.apk "release-assets/android/YARA-Kids-${VERSION}.apk"
+
       - name: Upload Android artifact
         uses: actions/upload-artifact@v4
         with:
           name: android-wrapper
-          path: mobile-wrapper/android/app/build/outputs/apk/debug/*.apk
+          path: release-assets/android/*.apk
           if-no-files-found: error
 
   release:
@@ -115,4 +125,4 @@ jobs:
           generate_release_notes: true
           files: |
             release-assets/windows/*.exe
-            release-assets/android/*
+            release-assets/android/*.apk

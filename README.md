@@ -2,8 +2,8 @@
 
 This repository contains two lightweight native wrapper projects and a GitHub Actions workflow:
 
-- `desktop-wrapper/`: Electron configuration for generating a Windows executable that opens the production site in a fullscreen, chromeless window.
-- `mobile-wrapper/`: Capacitor configuration for generating an Android APK that loads the production site as a live webview wrapper.
+- `desktop-wrapper/`: Electron configuration for generating a Windows installer with persistent session storage, branded splash screen and startup update checks against the latest GitHub Release.
+- `mobile-wrapper/`: Capacitor configuration for generating an Android APK that loads the production site as a live webview wrapper and applies the current site icon to launcher assets during CI.
 - `.github/workflows/build-apps.yml`: CI pipeline that builds both wrappers and publishes them to a GitHub Release.
 
 ## Triggering the workflow
