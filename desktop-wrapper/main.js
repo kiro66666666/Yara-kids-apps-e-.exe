@@ -19,6 +19,7 @@ const DEFAULT_BRANDING = {
 app.setName('YARA Kids');
 app.setAppUserModelId('com.yarakids.desktop');
 app.setPath('userData', path.join(app.getPath('appData'), 'YARA Kids Desktop'));
+const RUNTIME_BRANDING_PATH = path.join(app.getPath('userData'), 'runtime-branding.json');
 
 let mainWindow = null;
 let splashWindow = null;
@@ -30,12 +31,22 @@ if (!singleInstanceLock) {
 }
 
 function loadBranding() {
+  const buildBranding = readJsonFile(BRANDING_METADATA_PATH);
+  const runtimeBranding = readJsonFile(RUNTIME_BRANDING_PATH);
+  return { ...DEFAULT_BRANDING, ...buildBranding, ...runtimeBranding };
+}
+
+function readJsonFile(filePath) {
   try {
-    const branding = JSON.parse(fs.readFileSync(BRANDING_METADATA_PATH, 'utf8'));
-    return { ...DEFAULT_BRANDING, ...branding };
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
   } catch (error) {
-    return DEFAULT_BRANDING;
+    return {};
   }
+}
+
+function writeJsonFile(filePath, payload) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`);
 }
 
 function escapeHtml(value) {
@@ -51,6 +62,17 @@ function buildSplashHtml(branding) {
   const iconDataUrl = fs.existsSync(WINDOW_ICON_PNG_PATH)
     ? nativeImage.createFromPath(WINDOW_ICON_PNG_PATH).toDataURL()
     : '';
+  const heroMediaUrl =
+    branding.splashMediaUrl ||
+    branding.heroMediaUrl ||
+    branding.bannerMediaUrl ||
+    branding.logoUrl ||
+    branding.appIconUrl ||
+    branding.faviconUrl ||
+    iconDataUrl;
+  const heroMediaKind =
+    branding.splashMediaKind ||
+    (/\.(mp4|webm|ogg|mov)(\?|$)/i.test(String(heroMediaUrl || '')) ? 'video' : 'image');
   const title = escapeHtml(branding.title || DEFAULT_BRANDING.title);
   const description = escapeHtml(branding.description || DEFAULT_BRANDING.description);
   const themeColor = branding.themeColor || DEFAULT_BRANDING.themeColor;
@@ -134,6 +156,44 @@ function buildSplashHtml(branding) {
           font-size: 12px;
           color: var(--muted);
         }
+        .preview {
+          margin-top: 24px;
+          border-radius: 22px;
+          overflow: hidden;
+          border: 1px solid rgba(255, 105, 180, 0.14);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.7);
+          background: linear-gradient(135deg, rgba(255, 240, 245, 0.9), rgba(255, 255, 255, 0.98));
+          min-height: 120px;
+          display: grid;
+          place-items: center;
+        }
+        .preview img {
+          width: 100%;
+          max-height: 170px;
+          object-fit: cover;
+          display: block;
+        }
+        .preview video {
+          width: 100%;
+          max-height: 190px;
+          object-fit: cover;
+          display: block;
+          background: #000;
+        }
+        .audio-toggle {
+          position: absolute;
+          right: 12px;
+          bottom: 12px;
+          border: 0;
+          border-radius: 999px;
+          padding: 10px 14px;
+          background: rgba(17, 24, 39, 0.72);
+          color: #fff;
+          font-size: 12px;
+          font-weight: 700;
+          cursor: pointer;
+          backdrop-filter: blur(8px);
+        }
         @keyframes pulse {
           0%, 100% { transform: scale(1); opacity: 1; }
           50% { transform: scale(1.35); opacity: 0.55; }
@@ -152,6 +212,13 @@ function buildSplashHtml(branding) {
         <div class="status">
           <div class="dot"></div>
           <p>Carregando loja, sessão salva e serviços do aplicativo.</p>
+        </div>
+        <div class="preview">
+          ${heroMediaUrl
+            ? heroMediaKind === 'video'
+              ? `<video id="heroMedia" src="${escapeHtml(heroMediaUrl)}" autoplay muted loop playsinline></video><button class="audio-toggle" onclick="const media=document.getElementById('heroMedia'); media.muted=!media.muted; this.textContent=media.muted?'Ativar som':'Mutar';">Ativar som</button>`
+              : `<img src="${escapeHtml(heroMediaUrl)}" alt="${title}">`
+            : '<p>Branding sincronizado com o site.</p>'}
         </div>
         <div class="foot">Versão ${escapeHtml(app.getVersion())}</div>
       </div>
@@ -259,6 +326,79 @@ async function checkForUpdates(parentWindow) {
   }
 }
 
+async function syncRuntimeBranding() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  try {
+    const runtimeBranding = await mainWindow.webContents.executeJavaScript(`
+      (() => {
+        const parseJson = (value) => {
+          try {
+            return JSON.parse(value || 'null') || {};
+          } catch (error) {
+            return {};
+          }
+        };
+
+        const cached = parseJson(localStorage.getItem('yarakids_branding'));
+        const icon = document.getElementById('appIcon');
+        const appleIcon = document.getElementById('appAppleIcon');
+        const shortcutIcon = document.getElementById('appShortcutIcon');
+        const themeColor = document.querySelector('meta[name="theme-color"]')?.getAttribute('content');
+        const description = document.querySelector('meta[name="description"]')?.getAttribute('content');
+        const appTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]')?.getAttribute('content') || document.title;
+
+        return {
+          ...cached,
+          title: appTitle || null,
+          description: description || null,
+          themeColor: themeColor || null,
+          faviconUrl: icon?.href || shortcutIcon?.href || cached.faviconUrl || null,
+          appIconUrl: cached.appIconUrl || appleIcon?.href || null,
+          logoUrl: cached.logoUrl || null,
+          splashMediaUrl:
+            cached.splashMediaUrl ||
+            cached.heroMediaUrl ||
+            cached.bannerMediaUrl ||
+            cached.bannerVideoUrl ||
+            cached.bannerImageUrl ||
+            cached.heroVideoUrl ||
+            cached.heroImageUrl ||
+            (Array.isArray(cached.banners) ? cached.banners.flatMap((item) => {
+              if (!item) return [];
+              if (typeof item === 'string') return [item];
+              return [item.videoUrl, item.imageUrl, item.mediaUrl, item.url];
+            }).find(Boolean) : null) ||
+            (Array.isArray(cached.slides) ? cached.slides.flatMap((item) => {
+              if (!item) return [];
+              if (typeof item === 'string') return [item];
+              return [item.videoUrl, item.imageUrl, item.mediaUrl, item.url];
+            }).find(Boolean) : null) ||
+            null,
+          splashMediaKind:
+            cached.splashMediaKind ||
+            (Array.isArray(cached.banners) ? (cached.banners.some((item) => item?.videoUrl) ? 'video' : null) : null) ||
+            (Array.isArray(cached.slides) ? (cached.slides.some((item) => item?.videoUrl) ? 'video' : null) : null) ||
+            null,
+          iconVersion: cached.iconVersion || 0,
+          siteUrl: location.origin + '/'
+        };
+      })();
+    `);
+
+    if (!runtimeBranding || typeof runtimeBranding !== 'object') return;
+
+    const mergedBranding = { ...loadBranding(), ...runtimeBranding };
+    writeJsonFile(RUNTIME_BRANDING_PATH, mergedBranding);
+
+    if (mergedBranding.title && !mainWindow.isDestroyed()) {
+      mainWindow.setTitle(mergedBranding.title);
+    }
+  } catch (error) {
+    console.warn(`Runtime branding sync skipped: ${error.message}`);
+  }
+}
+
 async function handleLoadFailure(errorCode, errorDescription) {
   if (!mainWindow || errorCode === -3) return;
 
@@ -320,6 +460,7 @@ function createMainWindow(branding) {
       mainWindow.maximize();
       mainWindow.show();
     }
+    syncRuntimeBranding();
     setTimeout(() => checkForUpdates(mainWindow), 1500);
   });
 
