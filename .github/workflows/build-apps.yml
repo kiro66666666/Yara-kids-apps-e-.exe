@@ -35,7 +35,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-wrapper
-          path: desktop-wrapper/dist/*
+          path: desktop-wrapper/dist/*.exe
           if-no-files-found: error
 
   build-android:
@@ -114,5 +114,5 @@ jobs:
           name: Native Wrapper Build ${{ github.run_number }}
           generate_release_notes: true
           files: |
-            release-assets/windows/*
+            release-assets/windows/*.exe
             release-assets/android/*

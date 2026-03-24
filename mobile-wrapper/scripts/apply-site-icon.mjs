@@ -34,9 +34,52 @@ function extractPreferredIconHref(html) {
   return preferredRaster || iconMatches[0] || null;
 }
 
+function extractManifestHref(html) {
+  const regex = /<link[^>]+rel=["'][^"']*manifest[^"']*["'][^>]+href=["']([^"']+)["']/i;
+  return html.match(regex)?.[1] || null;
+}
+
+function pickLargestManifestIcon(manifestJson) {
+  const icons = Array.isArray(manifestJson?.icons) ? manifestJson.icons : [];
+  if (!icons.length) return null;
+
+  const scoredIcons = icons
+    .filter((icon) => typeof icon?.src === 'string' && icon.src.trim())
+    .map((icon) => {
+      const sizes = String(icon.sizes || '')
+        .split(/\s+/)
+        .map((entry) => entry.toLowerCase())
+        .filter(Boolean);
+      const maxSize = sizes.reduce((largest, entry) => {
+        const [width] = entry.split('x');
+        const parsed = Number.parseInt(width, 10);
+        return Number.isFinite(parsed) ? Math.max(largest, parsed) : largest;
+      }, 0);
+      return { src: icon.src, maxSize };
+    })
+    .sort((left, right) => right.maxSize - left.maxSize);
+
+  return scoredIcons[0]?.src || null;
+}
+
 async function main() {
   const homeBuffer = await fetchBuffer(SITE_URL);
-  const iconHref = extractPreferredIconHref(homeBuffer.toString('utf8')) || '/icon-192.png';
+  const html = homeBuffer.toString('utf8');
+  let iconHref = null;
+
+  const manifestHref = extractManifestHref(html);
+  if (manifestHref) {
+    try {
+      const manifestUrl = new URL(manifestHref, SITE_URL).toString();
+      const manifestBuffer = await fetchBuffer(manifestUrl);
+      const manifestJson = JSON.parse(manifestBuffer.toString('utf8'));
+      iconHref = pickLargestManifestIcon(manifestJson);
+    } catch (error) {
+      console.warn(`Failed to resolve icon from site manifest: ${error}`);
+    }
+  }
+
+  iconHref = iconHref || extractPreferredIconHref(html) || '/icon-192.png';
   const iconUrl = new URL(iconHref, SITE_URL).toString();
   const iconBuffer = await fetchBuffer(iconUrl);
 
