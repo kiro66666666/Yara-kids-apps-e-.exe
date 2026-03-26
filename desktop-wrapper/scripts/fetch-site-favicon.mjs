@@ -33,47 +33,54 @@ function extractPreferredIconHref(html) {
 }
 
 function extractManifestHref(html) {
-  const regex = /<link[^>]+rel=["'][^"']*manifest[^"']*["'][^>]+href=["']([^"']+)["']/i;
-  return html.match(regex)?.[1] || null;
+  return html.match(/<link[^>]+rel=["'][^"']*manifest[^"']*["'][^>]+href=["']([^"']+)["']/i)?.[1] || null;
 }
 
 function pickLargestManifestIcon(manifestJson) {
   const icons = Array.isArray(manifestJson?.icons) ? manifestJson.icons : [];
   if (!icons.length) return null;
 
-  const scoredIcons = icons
+  return icons
     .filter((icon) => typeof icon?.src === 'string' && icon.src.trim())
     .map((icon) => {
-      const sizes = String(icon.sizes || '')
+      const maxSize = String(icon.sizes || '')
         .split(/\s+/)
-        .map((entry) => entry.toLowerCase())
-        .filter(Boolean);
-      const maxSize = sizes.reduce((largest, entry) => {
-        const [width] = entry.split('x');
-        const parsed = Number.parseInt(width, 10);
-        return Number.isFinite(parsed) ? Math.max(largest, parsed) : largest;
-      }, 0);
+        .map((entry) => Number.parseInt(entry.split('x')[0], 10) || 0)
+        .reduce((largest, current) => Math.max(largest, current), 0);
       return { src: icon.src, maxSize };
     })
-    .sort((left, right) => right.maxSize - left.maxSize);
-
-  return scoredIcons[0]?.src || null;
+    .sort((left, right) => right.maxSize - left.maxSize)[0]?.src || null;
 }
 
 function extractTagContent(html, pattern) {
   return html.match(pattern)?.[1]?.trim() || null;
 }
 
-function extractTitle(html) {
-  return extractTagContent(html, /<title>([^<]+)<\/title>/i);
+function extractMetaContent(html, kind, name) {
+  const pattern = new RegExp(`<meta[^>]+${kind}=["']${name}["'][^>]+content=["']([^"']+)["']`, 'i');
+  return extractTagContent(html, pattern);
 }
 
-function extractDefaultBranding(html) {
-  return {
-    logoUrl: extractTagContent(html, /logoUrl:\s*['"]([^'"]+)['"]/i),
-    faviconUrl: extractTagContent(html, /faviconUrl:\s*['"]([^'"]+)['"]/i),
-    appIconUrl: extractTagContent(html, /appIconUrl:\s*['"]([^'"]+)['"]/i)
-  };
+function extractConfigValue(html, key) {
+  return extractTagContent(html, new RegExp(`${key}\\s*:\\s*['"]([^'"]+)['"]`, 'i'));
+}
+
+function resolveSiteUrl(value) {
+  if (!value) return null;
+
+  try {
+    return new URL(value, SITE_URL).toString();
+  } catch (error) {
+    return null;
+  }
+}
+
+function firstDefined(...values) {
+  return values.find((value) => typeof value === 'string' && value.trim()) || null;
+}
+
+function detectMediaKind(url) {
+  return /\.(mp4|webm|ogg|mov)(\?|$)/i.test(String(url || '')) ? 'video' : 'image';
 }
 
 async function main() {
@@ -81,9 +88,8 @@ async function main() {
 
   const home = await fetchBuffer(SITE_URL);
   const html = home.buffer.toString('utf8');
-  const defaultBranding = extractDefaultBranding(html);
-  let iconHref = null;
 
+  let iconHref = null;
   const manifestHref = extractManifestHref(html);
   if (manifestHref) {
     try {
@@ -97,7 +103,7 @@ async function main() {
   }
 
   iconHref = iconHref || extractPreferredIconHref(html) || '/icon-192.png';
-  const iconUrl = new URL(iconHref, SITE_URL).toString();
+  const iconUrl = resolveSiteUrl(iconHref);
   const { buffer } = await fetchBuffer(iconUrl);
 
   const pngBuffer = await sharp(buffer)
@@ -105,20 +111,50 @@ async function main() {
     .png()
     .toBuffer();
 
+  const explicitSplashMediaUrl = firstDefined(
+    extractConfigValue(html, 'splashMediaUrl'),
+    extractConfigValue(html, 'heroMediaUrl'),
+    extractConfigValue(html, 'bannerMediaUrl'),
+    extractConfigValue(html, 'heroVideoUrl'),
+    extractConfigValue(html, 'bannerVideoUrl'),
+    extractMetaContent(html, 'property', 'og:video'),
+    extractMetaContent(html, 'name', 'twitter:player')
+  );
+
+  const previewImageUrl = firstDefined(
+    extractConfigValue(html, 'heroImageUrl'),
+    extractConfigValue(html, 'bannerImageUrl'),
+    extractConfigValue(html, 'previewImageUrl'),
+    extractMetaContent(html, 'property', 'og:image'),
+    extractMetaContent(html, 'name', 'twitter:image'),
+    extractConfigValue(html, 'logoUrl')
+  );
+
+  const splashMediaUrl = firstDefined(explicitSplashMediaUrl, previewImageUrl);
+
   const branding = {
     title:
-      extractTagContent(html, /<meta[^>]+name=["']apple-mobile-web-app-title["'][^>]+content=["']([^"']+)["']/i) ||
-      extractTitle(html) ||
+      extractMetaContent(html, 'name', 'apple-mobile-web-app-title') ||
+      extractTagContent(html, /<title>([^<]+)<\/title>/i) ||
       'YARA Kids',
     description:
-      extractTagContent(html, /<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i) ||
+      extractMetaContent(html, 'name', 'description') ||
       'Moda infantil com amor e conforto.',
     themeColor:
-      extractTagContent(html, /<meta[^>]+name=["']theme-color["'][^>]+content=["']([^"']+)["']/i) ||
+      extractMetaContent(html, 'name', 'theme-color') ||
       '#ff69b4',
     iconUrl,
-    faviconUrl: new URL(defaultBranding.faviconUrl || iconHref, SITE_URL).toString(),
-    logoUrl: defaultBranding.logoUrl ? new URL(defaultBranding.logoUrl, SITE_URL).toString() : null,
+    faviconUrl: resolveSiteUrl(firstDefined(extractConfigValue(html, 'faviconUrl'), iconHref)),
+    appIconUrl: resolveSiteUrl(firstDefined(extractConfigValue(html, 'appIconUrl'), iconHref)),
+    logoUrl: resolveSiteUrl(extractConfigValue(html, 'logoUrl')),
+    heroImageUrl: resolveSiteUrl(previewImageUrl),
+    bannerImageUrl: resolveSiteUrl(firstDefined(extractConfigValue(html, 'bannerImageUrl'), previewImageUrl)),
+    ogImageUrl: resolveSiteUrl(extractMetaContent(html, 'property', 'og:image')),
+    twitterImageUrl: resolveSiteUrl(extractMetaContent(html, 'name', 'twitter:image')),
+    heroVideoUrl: resolveSiteUrl(firstDefined(extractConfigValue(html, 'heroVideoUrl'), extractMetaContent(html, 'property', 'og:video'))),
+    bannerVideoUrl: resolveSiteUrl(extractConfigValue(html, 'bannerVideoUrl')),
+    splashMediaUrl: resolveSiteUrl(splashMediaUrl),
+    splashMediaKind: detectMediaKind(splashMediaUrl),
     siteUrl: SITE_URL
   };
 

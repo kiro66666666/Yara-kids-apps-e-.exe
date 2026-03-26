@@ -1,45 +1,52 @@
 {
-  "name": "yara-kids-desktop-wrapper",
-  "version": "1.2.0",
-  "private": true,
-  "description": "Electron wrapper for the YARA Kids production site.",
-  "main": "main.js",
-  "scripts": {
-    "start": "electron .",
-    "build:prepare": "node scripts/fetch-site-favicon.mjs",
-    "build": "npm run build:prepare && electron-builder --publish never --win nsis"
-  },
-  "build": {
-    "appId": "com.yarakids.desktop",
-    "productName": "YARA Kids",
-    "directories": {
-      "output": "dist"
-    },
-    "files": [
-      "main.js",
-      "preload.js",
-      "package.json",
-      "scripts/**/*",
-      "assets/**/*"
-    ],
-    "win": {
-      "target": [
-        "nsis"
-      ],
-      "artifactName": "YARA-Kids-Setup-${version}.${ext}",
-      "icon": "assets/icon.ico"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
-    },
-    "icon": "assets/icon.ico"
-  },
-  "devDependencies": {
-    "electron": "^35.0.0",
-    "electron-builder": "^26.0.12",
-    "png-to-ico": "^2.1.8",
-    "sharp": "^0.34.2"
-  },
-  "author": "YARA Kids"
+    "name":  "yara-kids-desktop-wrapper",
+    "version":  "1.4.0",
+    "private":  true,
+    "description":  "Electron wrapper for the YARA Kids production site.",
+    "main":  "main.js",
+    "scripts":  {
+                    "start":  "electron .",
+                    "build:prepare":  "node scripts/fetch-site-favicon.mjs \u0026\u0026 node scripts/generate-installer-assets.mjs",
+                    "build":  "npm run build:prepare \u0026\u0026 electron-builder --publish never --win nsis"
+                },
+    "build":  {
+                  "appId":  "com.yarakids.desktop",
+                  "productName":  "YARA Kids",
+                  "directories":  {
+                                      "output":  "dist"
+                                  },
+                  "files":  [
+                                "main.js",
+                                "preload.js",
+                                "package.json",
+                                "scripts/**/*",
+                                "assets/**/*"
+                            ],
+                  "win":  {
+                              "target":  [
+                                             "nsis"
+                                         ],
+                              "artifactName":  "YARA-Kids-Setup-${version}.${ext}",
+                              "icon":  "assets/icon.ico"
+                          },
+                  "nsis":  {
+                               "oneClick":  false,
+                               "allowToChangeInstallationDirectory":  true,
+                               "installerIcon":  "assets/icon.ico",
+                               "uninstallerIcon":  "assets/icon.ico",
+                               "installerHeader":  "assets/installerHeader.bmp",
+                               "installerSidebar":  "assets/installerSidebar.bmp",
+                               "uninstallerSidebar":  "assets/uninstallerSidebar.bmp",
+                               "include":  "build/installer.nsh"
+                           },
+                  "icon":  "assets/icon.ico"
+              },
+    "devDependencies":  {
+                            "electron":  "^35.0.0",
+                            "electron-builder":  "^26.0.12",
+                            "png-to-ico":  "^2.1.8",
+                            "sharp":  "^0.34.2"
+                        },
+    "author":  "YARA Kids",
+    "homepage":  "https://yara-kids-b48ed.web.app/"
 }

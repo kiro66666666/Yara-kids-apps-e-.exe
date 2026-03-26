@@ -211,7 +211,7 @@ function buildSplashHtml(branding) {
         </div>
         <div class="status">
           <div class="dot"></div>
-          <p>Carregando loja, sessão salva e serviços do aplicativo.</p>
+          <p>Carregando loja, sessao salva e servicos do aplicativo.</p>
         </div>
         <div class="preview">
           ${heroMediaUrl
@@ -220,7 +220,7 @@ function buildSplashHtml(branding) {
               : `<img src="${escapeHtml(heroMediaUrl)}" alt="${title}">`
             : '<p>Branding sincronizado com o site.</p>'}
         </div>
-        <div class="foot">Versão ${escapeHtml(app.getVersion())}</div>
+        <div class="foot">Versao ${escapeHtml(app.getVersion())}</div>
       </div>
     </body>
   </html>`;
@@ -310,12 +310,12 @@ async function checkForUpdates(parentWindow) {
 
     const { response: buttonIndex } = await dialog.showMessageBox(parentWindow, {
       type: 'info',
-      title: 'Atualização disponível',
-      buttons: ['Baixar atualização', 'Depois'],
+      title: 'Atualizacao disponivel',
+      buttons: ['Baixar atualizacao', 'Depois'],
       defaultId: 0,
       cancelId: 1,
-      message: `Existe uma nova versão do YARA Kids (${latestVersion}).`,
-      detail: `Versão instalada: ${installedVersion}\nVersão mais recente: ${latestVersion}\nO instalador oficial será aberto no release do GitHub para você baixar e atualizar sem perder os dados locais.`
+      message: `Existe uma nova versao do YARA Kids (${latestVersion}).`,
+      detail: `Versao instalada: ${installedVersion}\nVersao mais recente: ${latestVersion}\nO instalador oficial sera aberto no release do GitHub para voce baixar e atualizar sem perder os dados locais.`
     });
 
     if (buttonIndex === 0) {
@@ -413,8 +413,8 @@ async function handleLoadFailure(errorCode, errorDescription) {
     buttons: ['Tentar novamente', 'Fechar aplicativo'],
     defaultId: 0,
     cancelId: 1,
-    message: 'O aplicativo não conseguiu abrir o site da YARA Kids.',
-    detail: `Detalhe técnico: ${errorDescription || 'erro desconhecido'}`
+    message: 'O aplicativo nao conseguiu abrir o site da YARA Kids.',
+    detail: `Detalhe tecnico: ${errorDescription || 'erro desconhecido'}`
   });
 
   if (response === 0) {
