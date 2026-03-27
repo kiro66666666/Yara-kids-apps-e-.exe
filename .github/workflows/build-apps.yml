@@ -87,8 +87,7 @@ jobs:
       - name: Rename Android APK for release
         run: |
           mkdir -p release-assets/android
-          VERSION=$(node -p "require('./mobile-wrapper/package.json').version")
-          cp mobile-wrapper/android/app/build/outputs/apk/debug/app-debug.apk "release-assets/android/YARA-Kids-${VERSION}.apk"
+          cp mobile-wrapper/android/app/build/outputs/apk/debug/app-debug.apk "release-assets/android/YARA-Kids.apk"
 
       - name: Upload Android artifact
         uses: actions/upload-artifact@v4
@@ -105,6 +104,21 @@ jobs:
       - build-android
 
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Resolve app version
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(python - <<'PY'
+          import json
+          with open('desktop-wrapper/package.json', 'r', encoding='utf-8') as fh:
+              print(json.load(fh)['version'])
+          PY
+          )
+          echo "value=${VERSION}" >> "$GITHUB_OUTPUT"
+
       - name: Download Windows artifact
         uses: actions/download-artifact@v4
         with:
@@ -121,7 +135,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: native-wrapper-build-${{ github.run_number }}
-          name: Native Wrapper Build ${{ github.run_number }}
+          name: YARA Kids Native Wrappers v${{ steps.version.outputs.value }} (build ${{ github.run_number }})
           generate_release_notes: true
           files: |
             release-assets/windows/*.exe
