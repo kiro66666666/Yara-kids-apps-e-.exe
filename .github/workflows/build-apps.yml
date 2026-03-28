@@ -1,9 +1,6 @@
 name: Build Native Wrappers
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
@@ -13,6 +10,11 @@ jobs:
   build-windows:
     name: Build Electron Windows Wrapper
     runs-on: windows-latest
+    env:
+      CSC_LINK: ${{ secrets.CSC_LINK || secrets.WIN_CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD || secrets.WIN_CSC_KEY_PASSWORD }}
+      WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK || secrets.CSC_LINK }}
+      WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD || secrets.CSC_KEY_PASSWORD }}
 
     steps:
       - name: Check out repository
@@ -31,11 +33,27 @@ jobs:
         working-directory: desktop-wrapper
         run: npm run build
 
+      - name: Verify Windows code signing
+        shell: pwsh
+        run: |
+          $signingConfigured = -not [string]::IsNullOrWhiteSpace($env:CSC_LINK) -or -not [string]::IsNullOrWhiteSpace($env:WIN_CSC_LINK)
+          if ($signingConfigured) {
+            $exes = Get-ChildItem -Path 'desktop-wrapper/dist' -Filter '*.exe' -File
+            foreach ($exe in $exes) {
+              $signature = Get-AuthenticodeSignature -FilePath $exe.FullName
+              if ($signature.Status -ne 'Valid') {
+                throw "Expected a valid signed Windows binary, but `$($exe.FullName)` has signature status `$($signature.Status)`."
+              }
+            }
+          }
+
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
           name: windows-wrapper
-          path: desktop-wrapper/dist/*.exe
+          path: |
+            desktop-wrapper/dist/YARA-Kids-Setup.exe
+            desktop-wrapper/dist/YARA-Kids.windows.manifest.json
           if-no-files-found: error
 
   build-android:
@@ -131,6 +149,48 @@ jobs:
           name: android-wrapper
           path: release-assets/android
 
+      - name: Finalize Windows manifest for release
+        shell: bash
+        env:
+          RELEASE_TAG: native-wrapper-build-${{ github.run_number }}
+          APP_VERSION: ${{ steps.version.outputs.value }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          INSTALLER_URL="https://github.com/${REPOSITORY}/releases/download/${RELEASE_TAG}/YARA-Kids-Setup.exe"
+          RELEASE_URL="https://github.com/${REPOSITORY}/releases/tag/${RELEASE_TAG}"
+          INSTALLER_PATH="release-assets/windows/YARA-Kids-Setup.exe"
+          INSTALLER_SHA256="$(sha256sum "${INSTALLER_PATH}" | awk '{print $1}')"
+          INSTALLER_SIZE="$(stat -c%s "${INSTALLER_PATH}")"
+          export INSTALLER_URL RELEASE_URL INSTALLER_SHA256 INSTALLER_SIZE
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          manifest_path = Path('release-assets/windows/YARA-Kids.windows.manifest.json')
+          manifest = {}
+          if manifest_path.exists():
+              manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+
+          manifest.update({
+              'schemaVersion': 1,
+              'appId': 'com.yarakids.desktop',
+              'productName': 'YARA Kids',
+              'channel': 'stable',
+              'version': os.environ['APP_VERSION'],
+              'publishedAt': manifest.get('publishedAt') or __import__('datetime').datetime.utcnow().replace(microsecond=0).isoformat() + 'Z',
+              'releaseUrl': os.environ['RELEASE_URL'],
+          })
+          manifest['installer'] = {
+              'name': 'YARA-Kids-Setup.exe',
+              'url': os.environ['INSTALLER_URL'],
+              'sha256': os.environ['INSTALLER_SHA256'],
+              'size': int(os.environ['INSTALLER_SIZE']),
+          }
+
+          manifest_path.write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
+          PY
+
       - name: Publish release
         uses: softprops/action-gh-release@v1
         with:
@@ -138,5 +198,6 @@ jobs:
           name: YARA Kids Native Wrappers v${{ steps.version.outputs.value }} (build ${{ github.run_number }})
           generate_release_notes: true
           files: |
-            release-assets/windows/*.exe
+            release-assets/windows/YARA-Kids-Setup.exe
+            release-assets/windows/YARA-Kids.windows.manifest.json
             release-assets/android/*.apk

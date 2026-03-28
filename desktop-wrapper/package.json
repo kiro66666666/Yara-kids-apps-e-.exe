@@ -1,13 +1,14 @@
 {
     "name":  "yara-kids-desktop-wrapper",
-    "version":  "1.5.0",
+    "version":  "1.6.0",
     "private":  true,
     "description":  "Electron wrapper for the YARA Kids production site.",
     "main":  "main.js",
     "scripts":  {
                     "start":  "electron .",
                     "build:prepare":  "node scripts/fetch-site-favicon.mjs \u0026\u0026 node scripts/generate-installer-assets.mjs",
-                    "build":  "npm run build:prepare \u0026\u0026 electron-builder --publish never --win nsis"
+                    "build:manifest":  "node scripts/generate-windows-manifest.mjs",
+                    "build":  "npm run build:prepare \u0026\u0026 electron-builder --publish never --win nsis \u0026\u0026 npm run build:manifest"
                 },
     "build":  {
                   "appId":  "com.yarakids.desktop",
