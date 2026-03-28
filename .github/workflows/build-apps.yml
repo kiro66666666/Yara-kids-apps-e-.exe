@@ -1,6 +1,9 @@
 name: Build Native Wrappers
 
 on:
+  push:
+    tags:
+      - 'release-windows-*'
   workflow_dispatch:
 
 permissions:
