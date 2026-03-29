@@ -53,6 +53,7 @@ app.setPath('userData', path.join(app.getPath('appData'), 'YARA Kids Desktop'));
 const RUNTIME_BRANDING_PATH = path.join(app.getPath('userData'), 'runtime-branding.json');
 const RUNTIME_CONFIG_PATH = path.join(app.getPath('userData'), 'runtime-config.json');
 const RUNTIME_MANIFEST_PATH = path.join(app.getPath('userData'), 'runtime-manifest.json');
+const ALLOWED_EXTERNAL_PROTOCOLS = new Set(['http:', 'https:', 'mailto:', 'tel:']);
 
 let launcherWindow = null;
 let mainWindow = null;
@@ -105,6 +106,89 @@ function normalizeUrl(value, baseUrl) {
   } catch (error) {
     return null;
   }
+}
+
+function getSiteOrigin() {
+  try {
+    return new URL(runtimeContext?.config?.siteUrl || DEFAULT_SITE_URL).origin;
+  } catch (error) {
+    return new URL(DEFAULT_SITE_URL).origin;
+  }
+}
+
+function isSameSiteOrigin(value) {
+  try {
+    return new URL(value).origin === getSiteOrigin();
+  } catch (error) {
+    return false;
+  }
+}
+
+function openExternalSafely(url, contextLabel = 'external link') {
+  try {
+    const parsed = new URL(url);
+    if (!ALLOWED_EXTERNAL_PROTOCOLS.has(parsed.protocol)) {
+      console.warn(`Blocked ${contextLabel} with unsupported protocol: ${url}`);
+      return false;
+    }
+
+    void Promise.resolve(shell.openExternal(parsed.toString())).catch((error) => {
+      console.warn(`Failed to open ${contextLabel}: ${error.message}`);
+    });
+    return true;
+  } catch (error) {
+    console.warn(`Blocked ${contextLabel} with invalid URL: ${url}`);
+    return false;
+  }
+}
+
+function attachSecurityGuards(webContents, { label, allowSameOriginNavigation = false, allowExternalPopups = false }) {
+  if (!webContents) {
+    return;
+  }
+
+  webContents.setWindowOpenHandler(({ url }) => {
+    if (isSameSiteOrigin(url)) {
+      console.warn(`[${label}] blocked same-origin popup: ${url}`);
+      return { action: 'deny' };
+    }
+
+    if (allowExternalPopups && openExternalSafely(url, `${label} popup`)) {
+      return { action: 'deny' };
+    }
+
+    console.warn(`[${label}] blocked popup: ${url}`);
+    return { action: 'deny' };
+  });
+
+  webContents.on('will-navigate', (event, url) => {
+    if (allowSameOriginNavigation && isSameSiteOrigin(url)) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (!isSameSiteOrigin(url) && openExternalSafely(url, `${label} navigation`)) {
+      return;
+    }
+
+    console.warn(`[${label}] blocked navigation: ${url}`);
+  });
+
+  if (webContents.session?.setPermissionRequestHandler) {
+    webContents.session.setPermissionRequestHandler((_requestWebContents, permission, callback, details) => {
+      console.warn(`[${label}] denied permission request: ${permission}`);
+      callback(false);
+    });
+  }
+
+  webContents.on('unresponsive', () => {
+    console.warn(`[${label}] renderer became unresponsive`);
+  });
+
+  webContents.on('render-process-gone', (_event, details) => {
+    console.warn(`[${label}] render process gone: ${details?.reason || 'unknown'}`);
+  });
 }
 
 function sanitizeThemeColor(value, fallbackValue = DEFAULT_BRANDING.themeColor) {
@@ -450,8 +534,15 @@ function createLauncherWindow(branding) {
     webPreferences: {
       preload: PRELOAD_PATH,
       contextIsolation: true,
+      nodeIntegration: false,
       sandbox: true
     }
+  });
+
+  attachSecurityGuards(launcherWindow.webContents, {
+    label: 'launcher',
+    allowSameOriginNavigation: false,
+    allowExternalPopups: false
   });
 
   launcherDidLoad = false;
@@ -631,9 +722,10 @@ function createMainWindow(runtime) {
     }
   });
 
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
-    return { action: 'deny' };
+  attachSecurityGuards(mainWindow.webContents, {
+    label: 'main',
+    allowSameOriginNavigation: true,
+    allowExternalPopups: true
   });
 
   mainWindow.webContents.on('did-start-loading', () => {
@@ -684,6 +776,41 @@ function createMainWindow(runtime) {
       detail: `Falha de carregamento: ${errorDescription || 'erro desconhecido'}. Voce pode tentar novamente.`,
       progressPercent: null,
       statusTone: 'error',
+      actions: [
+        { id: 'retry', label: 'Tentar novamente', variant: 'primary' },
+        { id: 'quit', label: 'Fechar', variant: 'secondary' }
+      ]
+    });
+  });
+
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    if (!details || details.reason === 'clean-exit') {
+      return;
+    }
+
+    clearReadyFallbackTimer();
+    mainWindow.hide();
+    setLauncherState({
+      mode: 'offline',
+      headline: 'A interface principal foi encerrada',
+      detail: `O renderer do site parou (${details.reason || 'motivo desconhecido'}). Tente abrir novamente.`,
+      progressPercent: null,
+      statusTone: 'error',
+      actions: [
+        { id: 'retry', label: 'Tentar novamente', variant: 'primary' },
+        { id: 'quit', label: 'Fechar', variant: 'secondary' }
+      ]
+    });
+  });
+
+  mainWindow.webContents.on('unresponsive', () => {
+    clearReadyFallbackTimer();
+    setLauncherState({
+      mode: 'offline',
+      headline: 'A interface principal nao responde',
+      detail: 'O site travou sem retorno do renderer. Voce pode tentar carregar de novo.',
+      progressPercent: null,
+      statusTone: 'warning',
       actions: [
         { id: 'retry', label: 'Tentar novamente', variant: 'primary' },
         { id: 'quit', label: 'Fechar', variant: 'secondary' }
@@ -782,7 +909,8 @@ function launchSilentInstaller(installerPath) {
   fs.writeFileSync(scriptPath, script, 'utf8');
   const child = spawn('cmd.exe', ['/c', scriptPath], {
     detached: true,
-    stdio: 'ignore'
+    stdio: 'ignore',
+    windowsHide: true
   });
   child.unref();
 }
