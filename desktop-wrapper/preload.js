@@ -42,6 +42,7 @@ contextBridge.exposeInMainWorld('yaraKidsNative', {
   markAppReady: (detail) => sendSiteReady(detail),
   updateLauncherConfig: (detail) => sendLauncherConfig(detail),
   sendLauncherAction: (actionId) => ipcRenderer.send('yara-kids:launcher-action', actionId),
+  openExternalUrl: (url) => ipcRenderer.invoke('yara-kids:open-external-url', url),
   onLauncherState: (listener) => {
     if (typeof listener !== 'function') {
       return;
@@ -49,5 +50,15 @@ contextBridge.exposeInMainWorld('yaraKidsNative', {
 
     const subscription = (_event, state) => listener(state);
     ipcRenderer.on('yara-kids:launcher-state', subscription);
+    return () => ipcRenderer.removeListener('yara-kids:launcher-state', subscription);
+  },
+  onAuthCallback: (listener) => {
+    if (typeof listener !== 'function') {
+      return;
+    }
+
+    const subscription = (_event, url) => listener(url);
+    ipcRenderer.on('yara-kids:auth-callback', subscription);
+    return () => ipcRenderer.removeListener('yara-kids:auth-callback', subscription);
   }
 });

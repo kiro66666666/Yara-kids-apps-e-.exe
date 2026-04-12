@@ -1,6 +1,6 @@
 {
     "name":  "yara-kids-desktop-wrapper",
-    "version":  "1.6.0",
+    "version":  "1.6.1",
     "private":  true,
     "description":  "Electron wrapper for the YARA Kids production site.",
     "main":  "main.js",
@@ -40,6 +40,14 @@
                                "uninstallerSidebar":  "assets/uninstallerSidebar.bmp",
                                "include":  "build/installer.nsh"
                            },
+                  "protocols":  [
+                                    {
+                                        "name":  "YARA Kids",
+                                        "schemes":  [
+                                                        "yarakids"
+                                                    ]
+                                    }
+                                ],
                   "icon":  "assets/icon.ico"
               },
     "devDependencies":  {

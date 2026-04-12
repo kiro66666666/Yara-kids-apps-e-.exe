@@ -17,6 +17,7 @@ const BRANDING_METADATA_PATH = path.join(__dirname, 'assets', 'branding.json');
 const LAUNCHER_HTML_PATH = path.join(__dirname, 'assets', 'launcher.html');
 const PRELOAD_PATH = path.join(__dirname, 'preload.js');
 const PERSISTENT_PARTITION = 'persist:yara-kids';
+const APP_PROTOCOL = 'yarakids';
 
 const DEFAULT_BRANDING = {
   title: 'YARA Kids',
@@ -65,6 +66,7 @@ let bootstrapInFlight = false;
 let updateInProgress = false;
 let releaseApiManifestChecked = false;
 let siteReadyHandled = false;
+const pendingAuthCallbackUrls = [];
 
 const singleInstanceLock = app.requestSingleInstanceLock();
 if (!singleInstanceLock) {
@@ -140,6 +142,54 @@ function openExternalSafely(url, contextLabel = 'external link') {
     console.warn(`Blocked ${contextLabel} with invalid URL: ${url}`);
     return false;
   }
+}
+
+function extractProtocolUrl(argv = []) {
+  return argv.find((value) => typeof value === 'string' && value.startsWith(`${APP_PROTOCOL}://`)) || null;
+}
+
+function registerAppProtocol() {
+  try {
+    if (app.isPackaged) {
+      app.setAsDefaultProtocolClient(APP_PROTOCOL);
+      return;
+    }
+
+    if (process.platform === 'win32' && process.argv[1]) {
+      app.setAsDefaultProtocolClient(APP_PROTOCOL, process.execPath, [path.resolve(process.argv[1])]);
+      return;
+    }
+
+    app.setAsDefaultProtocolClient(APP_PROTOCOL);
+  } catch (error) {
+    console.warn(`Failed to register ${APP_PROTOCOL} protocol: ${error.message}`);
+  }
+}
+
+function dispatchPendingAuthCallbacks() {
+  if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.webContents) {
+    return;
+  }
+
+  while (pendingAuthCallbackUrls.length > 0) {
+    const callbackUrl = pendingAuthCallbackUrls.shift();
+    mainWindow.webContents.send('yara-kids:auth-callback', callbackUrl);
+  }
+}
+
+function queueAuthCallbackUrl(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== `${APP_PROTOCOL}:`) {
+      return;
+    }
+  } catch (error) {
+    console.warn(`Ignored invalid auth callback URL: ${url}`);
+    return;
+  }
+
+  pendingAuthCallbackUrls.push(url);
+  dispatchPendingAuthCallbacks();
 }
 
 function attachSecurityGuards(webContents, { label, allowSameOriginNavigation = false, allowExternalPopups = false }) {
@@ -755,6 +805,7 @@ function createMainWindow(runtime) {
     }
 
     await syncRuntimeBrandingFromSite();
+    dispatchPendingAuthCallbacks();
   });
 
   mainWindow.webContents.on('did-stop-loading', () => {
@@ -1093,6 +1144,8 @@ function handleLauncherAction(actionId) {
 }
 
 function registerIpcHandlers() {
+  ipcMain.handle('yara-kids:open-external-url', (_event, url) => openExternalSafely(url, 'renderer request'));
+
   ipcMain.on('yara-kids:launcher-action', (_, actionId) => {
     handleLauncherAction(actionId);
   });
@@ -1121,10 +1174,14 @@ function registerIpcHandlers() {
 }
 
 if (singleInstanceLock) {
-  app.on('second-instance', () => {
+  app.on('second-instance', (_event, argv) => {
+    const protocolUrl = extractProtocolUrl(argv);
+    if (protocolUrl) {
+      queueAuthCallbackUrl(protocolUrl);
+    }
+
     if (launcherWindow && !launcherWindow.isDestroyed()) {
       launcherWindow.focus();
-      return;
     }
 
     if (!mainWindow) {
@@ -1138,9 +1195,14 @@ if (singleInstanceLock) {
   });
 
   app.whenReady().then(() => {
+    registerAppProtocol();
     registerIpcHandlers();
     const buildBranding = loadBuildBranding();
     createLauncherWindow(composeLauncherBranding(buildBranding, normalizeWindowsConfig(DEFAULT_WINDOWS_CONFIG, buildBranding)));
+    const launchProtocolUrl = extractProtocolUrl(process.argv);
+    if (launchProtocolUrl) {
+      queueAuthCallbackUrl(launchProtocolUrl);
+    }
     bootstrapApplication();
 
     app.on('activate', () => {
@@ -1152,6 +1214,11 @@ if (singleInstanceLock) {
     });
   });
 }
+
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  queueAuthCallbackUrl(url);
+});
 
 app.on('window-all-closed', () => {
   clearReadyFallbackTimer();
