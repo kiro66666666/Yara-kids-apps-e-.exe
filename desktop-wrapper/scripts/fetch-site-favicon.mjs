@@ -158,10 +158,6 @@ async function main() {
       .toBuffer();
 
     const explicitSplashMediaUrl = firstDefined(
-      firstMedia?.url,
-      launcherConfig.mediaUrl,
-      publicConfig?.splashMediaUrl,
-      publicConfig?.heroMediaUrl,
       extractConfigValue(html, 'splashMediaUrl'),
       extractConfigValue(html, 'heroMediaUrl'),
       extractConfigValue(html, 'bannerMediaUrl'),
@@ -172,12 +168,6 @@ async function main() {
     );
 
     const previewImageUrl = firstDefined(
-      firstMedia?.kind === 'image' ? firstMedia?.url : null,
-      firstMedia?.posterUrl,
-      launcherConfig.posterUrl,
-      publicConfig?.previewImageUrl,
-      publicConfig?.heroImageUrl,
-      publicConfig?.bannerImageUrl,
       extractConfigValue(html, 'heroImageUrl'),
       extractConfigValue(html, 'bannerImageUrl'),
       extractConfigValue(html, 'previewImageUrl'),
@@ -190,23 +180,23 @@ async function main() {
 
     const branding = {
       title:
+        extractMetaContent(html, 'name', 'apple-mobile-web-app-title') ||
+        extractTagContent(html, /<title>([^<]+)<\/title>/i) ||
         launcherConfig.title ||
         brandingConfig.title ||
         publicConfig?.title ||
-        extractMetaContent(html, 'name', 'apple-mobile-web-app-title') ||
-        extractTagContent(html, /<title>([^<]+)<\/title>/i) ||
         'YARA Kids',
       description:
+        extractMetaContent(html, 'name', 'description') ||
         brandingConfig.subtitle ||
         launcherConfig.description ||
         publicConfig?.description ||
-        extractMetaContent(html, 'name', 'description') ||
         'Moda infantil com amor e conforto.',
       themeColor:
+        extractMetaContent(html, 'name', 'theme-color') ||
         brandingConfig.themeColor ||
         launcherConfig.themeColor ||
         publicConfig?.themeColor ||
-        extractMetaContent(html, 'name', 'theme-color') ||
         '#ff69b4',
       iconUrl,
       faviconUrl: resolveSiteUrl(firstDefined(brandingConfig.faviconUrl, extractConfigValue(html, 'faviconUrl'), iconHref)),

@@ -298,16 +298,16 @@ function normalizeWindowsConfig(rawConfig, fallbackBranding = DEFAULT_BRANDING) 
     || PUBLIC_MANIFEST_URL;
   const mediaUrl = normalizeUrl(
     firstString(
+      fallbackBranding.splashMediaUrl,
+      fallbackBranding.heroImageUrl,
+      fallbackBranding.bannerImageUrl,
+      fallbackBranding.logoUrl,
       primaryMedia?.url,
       launcherSource.mediaUrl,
       launcherSource.splashMediaUrl,
       launcherSource.heroMediaUrl,
       source.splashMediaUrl,
-      source.heroMediaUrl,
-      fallbackBranding.splashMediaUrl,
-      fallbackBranding.heroImageUrl,
-      fallbackBranding.bannerImageUrl,
-      fallbackBranding.logoUrl
+      source.heroMediaUrl
     ),
     siteUrl
   );
@@ -318,29 +318,29 @@ function normalizeWindowsConfig(rawConfig, fallbackBranding = DEFAULT_BRANDING) 
     manifestUrl,
     launcher: {
       title: firstString(
+        fallbackBranding.title,
         launcherSource.title,
         brandingSource.title,
         source.title,
-        fallbackBranding.title,
         DEFAULT_BRANDING.title
       ),
       description: firstString(
+        fallbackBranding.description,
         launcherSource.description,
         launcherSource.subtitle,
         brandingSource.subtitle,
         source.description,
-        fallbackBranding.description,
         DEFAULT_BRANDING.description
       ),
       themeColor: sanitizeThemeColor(
-        firstString(launcherSource.themeColor, brandingSource.themeColor, source.themeColor, fallbackBranding.themeColor),
+        firstString(fallbackBranding.themeColor, launcherSource.themeColor, brandingSource.themeColor, source.themeColor),
         DEFAULT_BRANDING.themeColor
       ),
       mediaUrl,
       mediaKind: firstString(primaryMedia?.kind, launcherSource.mediaKind, source.mediaKind) || detectMediaKind(mediaUrl),
       posterUrl: normalizeUrl(firstString(primaryMedia?.posterUrl, launcherSource.posterUrl, source.posterUrl), siteUrl),
       accentLabel: firstString(launcherSource.accentLabel, launcherSource.ctaLabel, brandingSource.ctaLabel, source.accentLabel, 'Windows launcher'),
-      footnote: firstString(launcherSource.footnote, windowsSource.currentVersion && `Versao remota ${windowsSource.currentVersion}`, source.footnote, 'Aplicativo oficial Windows'),
+      footnote: firstString(launcherSource.footnote, source.footnote, 'Aplicativo oficial Windows'),
       readyTimeoutMs: clampNumber(
         firstString(launcherSource.readyTimeoutMs, source.readyTimeoutMs),
         4000,
