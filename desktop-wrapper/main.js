@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, nativeTheme, screen } = require('electron');
 const { spawn } = require('child_process');
 const { createHash } = require('crypto');
 const fs = require('fs');
@@ -567,6 +567,171 @@ function setLauncherState(patch) {
   }
 
   dispatchLauncherState();
+}
+
+
+/**
+ * Loading screen HTML with dark/light theme support.
+ * Shown immediately while the site loads.
+ */
+function getLoadingHtml(isDark) {
+  const bgColor = isDark ? '#1a1a2e' : '#FFF0F5';
+  const textColor = isDark ? '#e0e0e0' : '#555';
+  const spinnerColor = isDark ? '#333' : '#ffd6e7';
+  const spinnerActive = '#FF69B4';
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    background: ${bgColor};
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    transition: background 0.4s, color 0.4s;
+    overflow: hidden;
+  }
+  .loader {
+    width: 52px;
+    height: 52px;
+    border: 4px solid ${spinnerColor};
+    border-top-color: ${spinnerActive};
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .status {
+    margin-top: 20px;
+    color: ${textColor};
+    font-size: 15px;
+    font-weight: 400;
+    letter-spacing: 0.3px;
+  }
+  .brand {
+    margin-bottom: 32px;
+    font-size: 22px;
+    font-weight: 600;
+    color: #FF69B4;
+    letter-spacing: 1px;
+  }
+  .progress-bar {
+    margin-top: 24px;
+    width: 160px;
+    height: 3px;
+    background: ${isDark ? '#333' : '#ffd6e7'};
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    width: 30%;
+    background: linear-gradient(90deg, #FF69B4, #FFB6C1);
+    border-radius: 2px;
+    animation: progress 2s ease-in-out infinite;
+  }
+  @keyframes progress {
+    0% { width: 10%; }
+    50% { width: 60%; }
+    100% { width: 10%; }
+  }
+</style>
+</head>
+<body>
+  <div class="brand">YARA Kids</div>
+  <div class="loader"></div>
+  <div class="progress-bar"><div class="progress-fill"></div></div>
+  <p class="status">Carregando...</p>
+</body>
+</html>`;
+}
+
+/** Error page shown when the site fails to load. */
+function getErrorHtml() {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    background: #FFF0F5;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    text-align: center;
+    padding: 24px;
+  }
+  .icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+  }
+  h2 { color: #333; margin-bottom: 8px; font-weight: 600; }
+  p { color: #777; font-size: 14px; line-height: 1.5; margin-bottom: 24px; max-width: 360px; }
+  button {
+    background: #FF69B4;
+    color: #fff;
+    border: none;
+    padding: 10px 28px;
+    border-radius: 20px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  button:hover { background: #e0559e; }
+  .detail { color: #aaa; font-size: 11px; margin-top: 24px; }
+</style>
+</head>
+<body>
+  <div class="icon">&#9888;&#65039;</div>
+  <h2>Sem conex&atilde;o</h2>
+  <p>N&atilde;o foi poss&iacute;vel carregar o YARA Kids.<br>Verifique sua conex&atilde;o com a internet e tente novamente.</p>
+  <button onclick="location.reload()">Tentar novamente</button>
+  <p class="detail">YARA Kids &mdash; Moda Infantil</p>
+</body>
+</html>`;
+}
+
+function getOfflineHtml() {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    background: #FFF0F5;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    text-align: center;
+    padding: 24px;
+  }
+  .icon { font-size: 64px; margin-bottom: 16px; }
+  h2 { color: #333; margin-bottom: 8px; font-weight: 600; }
+  p { color: #777; font-size: 14px; line-height: 1.5; max-width: 320px; }
+</style>
+</head>
+<body>
+  <div class="icon">&#128246;</div>
+  <h2>Voc&ecirc; est&aacute; offline</h2>
+  <p>Conecte-se &agrave; internet para acessar o YARA Kids.</p>
+</body>
+</html>`;
 }
 
 function createLauncherWindow(branding) {

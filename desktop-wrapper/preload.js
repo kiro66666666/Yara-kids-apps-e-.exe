@@ -37,8 +37,9 @@ window.addEventListener('yara-kids:app-ready', (event) => sendSiteReady(event.de
 window.addEventListener('yara-kids:launcher-config', (event) => sendLauncherConfig(event.detail || {}));
 
 contextBridge.exposeInMainWorld('yaraKidsNative', {
-  platform: 'windows-desktop',
   wrapper: 'electron',
+  platform: process.platform,
+  isOnline: () => navigator.onLine,
   markAppReady: (detail) => sendSiteReady(detail),
   updateLauncherConfig: (detail) => sendLauncherConfig(detail),
   sendLauncherAction: (actionId) => ipcRenderer.send('yara-kids:launcher-action', actionId),
@@ -61,4 +62,8 @@ contextBridge.exposeInMainWorld('yaraKidsNative', {
     ipcRenderer.on('yara-kids:auth-callback', subscription);
     return () => ipcRenderer.removeListener('yara-kids:auth-callback', subscription);
   }
+});
+
+window.addEventListener('DOMContentLoaded', () => {
+  document.documentElement.dataset['nativeWrapper'] = 'electron';
 });

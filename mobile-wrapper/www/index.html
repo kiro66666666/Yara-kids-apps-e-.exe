@@ -1,11 +1,85 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>YARA Kids Mobile Wrapper</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>YARA Kids - Moda Infantil</title>
+    <meta name="theme-color" content="#FFF0F5" />
+    <meta name="color-scheme" content="light dark" />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        background: #FFF0F5;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        text-align: center;
+        padding: 24px;
+        transition: background 0.3s;
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: #1a1a2e;
+          color: #e0e0e0;
+        }
+        .status { color: #aaa; }
+        .loader { border-color: #333; border-top-color: #FF69B4; }
+      }
+      .brand {
+        font-size: 24px;
+        font-weight: 600;
+        color: #FF69B4;
+        margin-bottom: 24px;
+        letter-spacing: 1px;
+      }
+      .loader {
+        width: 48px;
+        height: 48px;
+        border: 4px solid #ffd6e7;
+        border-top-color: #FF69B4;
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .status {
+        margin-top: 16px;
+        color: #888;
+        font-size: 14px;
+      }
+      .offline-icon { font-size: 48px; margin-bottom: 16px; }
+      .offline-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+      .offline-msg { color: #888; font-size: 13px; max-width: 300px; line-height: 1.5; }
+      .hidden { display: none; }
+    </style>
   </head>
   <body>
-    <p>YARA Kids mobile wrapper bootstrap.</p>
+    <div id="loading">
+      <div class="brand">YARA Kids</div>
+      <div class="loader"></div>
+      <p class="status">Carregando...</p>
+    </div>
+    <div id="offline" class="hidden">
+      <div class="offline-icon">&#128246;</div>
+      <div class="offline-title">Sem conex&atilde;o</div>
+      <p class="offline-msg">Conecte-se &agrave; internet para acessar o YARA Kids.</p>
+    </div>
+    <script>
+      // Redirect to the production site after a short delay
+      // This file is used as a local fallback when the server URL cannot be loaded
+      setTimeout(() => {
+        window.location.replace('https://yara-kids-b48ed.web.app/');
+      }, 500);
+      
+      // If we're offline after timeout, show offline message
+      setTimeout(() => {
+        if (!navigator.onLine) {
+          document.getElementById('loading').classList.add('hidden');
+          document.getElementById('offline').classList.remove('hidden');
+        }
+      }, 3000);
+    </script>
   </body>
 </html>

@@ -22,6 +22,21 @@ async function fetchBuffer(url) {
   return Buffer.from(await response.arrayBuffer());
 }
 
+function extractManifestHref(html) {
+  const match = html.match(/<link[^>]+rel=["']manifest["'][^>]+href=["']([^"']+)["']/i);
+  return match?.[1] || null;
+}
+
+function pickLargestManifestIcon(manifest) {
+  if (!manifest?.icons?.length) return null;
+  const sorted = [...manifest.icons].sort((a, b) => {
+    const aSize = parseInt(a.sizes?.split('x')[0], 10) || 0;
+    const bSize = parseInt(b.sizes?.split('x')[0], 10) || 0;
+    return bSize - aSize;
+  });
+  return sorted[0].src;
+}
+
 function extractPreferredIconHref(html) {
   const appleTouchMatch = html.match(/<link[^>]+rel=["'][^"']*apple-touch-icon[^"']*["'][^>]+href=["']([^"']+)["']/i);
   if (appleTouchMatch?.[1]) return appleTouchMatch[1];
@@ -34,39 +49,12 @@ function extractPreferredIconHref(html) {
   return preferredRaster || iconMatches[0] || null;
 }
 
-function extractManifestHref(html) {
-  const regex = /<link[^>]+rel=["'][^"']*manifest[^"']*["'][^>]+href=["']([^"']+)["']/i;
-  return html.match(regex)?.[1] || null;
-}
-
-function pickLargestManifestIcon(manifestJson) {
-  const icons = Array.isArray(manifestJson?.icons) ? manifestJson.icons : [];
-  if (!icons.length) return null;
-
-  const scoredIcons = icons
-    .filter((icon) => typeof icon?.src === 'string' && icon.src.trim())
-    .map((icon) => {
-      const sizes = String(icon.sizes || '')
-        .split(/\s+/)
-        .map((entry) => entry.toLowerCase())
-        .filter(Boolean);
-      const maxSize = sizes.reduce((largest, entry) => {
-        const [width] = entry.split('x');
-        const parsed = Number.parseInt(width, 10);
-        return Number.isFinite(parsed) ? Math.max(largest, parsed) : largest;
-      }, 0);
-      return { src: icon.src, maxSize };
-    })
-    .sort((left, right) => right.maxSize - left.maxSize);
-
-  return scoredIcons[0]?.src || null;
-}
-
 async function main() {
+  // 1. Fetch site icon from the live site, preferring manifest icons
   const homeBuffer = await fetchBuffer(SITE_URL);
   const html = homeBuffer.toString('utf8');
-  let iconHref = null;
 
+  let iconHref = null;
   const manifestHref = extractManifestHref(html);
   if (manifestHref) {
     try {
@@ -83,11 +71,13 @@ async function main() {
   const iconUrl = new URL(iconHref, SITE_URL).toString();
   const iconBuffer = await fetchBuffer(iconUrl);
 
+  // 2. Generate standard PNG icons for pre-API 26 devices
   for (const [dirName, size] of sizes) {
     const targetDir = resolve(androidResDir, dirName);
     mkdirSync(targetDir, { recursive: true });
+
     const pngBuffer = await sharp(iconBuffer)
-      .resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .resize(size, size, { fit: 'contain', background: { r: 255, g: 240, b: 245, alpha: 0 } })
       .png()
       .toBuffer();
 
@@ -95,7 +85,55 @@ async function main() {
     writeFileSync(resolve(targetDir, 'ic_launcher_round.png'), pngBuffer);
   }
 
+  // 3. Generate adaptive icon foreground for API 26+
+  // Using 70% of the safe zone area (the inner 66% circle of the adaptive icon)
+  const foregroundSize = 512;
+  const foregroundBuffer = await sharp(iconBuffer)
+    .resize(Math.round(foregroundSize * 0.7), Math.round(foregroundSize * 0.7), {
+      fit: 'contain',
+      background: { r: 0, g: 0, b: 0, alpha: 0 }
+    })
+    .png()
+    .toBuffer();
+
+  const anydpiDir = resolve(androidResDir, 'mipmap-anydpi-v26');
+  mkdirSync(anydpiDir, { recursive: true });
+  writeFileSync(resolve(anydpiDir, 'ic_launcher_foreground.png'), foregroundBuffer);
+
+  // 4. Create background drawable (light pink to match site theme #FFF0F5)
+  const drawableDir = resolve(androidResDir, 'drawable');
+  mkdirSync(drawableDir, { recursive: true });
+
+  const backgroundXml = `<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+  <solid android:color="#FFF0F5" />
+</shape>`;
+  writeFileSync(resolve(drawableDir, 'ic_launcher_background.xml'), backgroundXml);
+
+  // 5. Create adaptive icon XML (normal + round) referencing background + foreground
+  const adaptiveIconXml = `<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+  <background android:drawable="@drawable/ic_launcher_background" />
+  <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+</adaptive-icon>`;
+
+  writeFileSync(resolve(anydpiDir, 'ic_launcher.xml'), adaptiveIconXml);
+  writeFileSync(resolve(anydpiDir, 'ic_launcher_round.xml'), adaptiveIconXml);
+
+  // 6. Also place foreground PNG in standard mipmap folders for broader compat
+  for (const [dirName] of sizes) {
+    const targetDir = resolve(androidResDir, dirName);
+    mkdirSync(targetDir, { recursive: true });
+    const foregroundScaled = await sharp(iconBuffer)
+      .resize(192, 192, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .png()
+      .toBuffer();
+    writeFileSync(resolve(targetDir, 'ic_launcher_foreground.png'), foregroundScaled);
+  }
+
   console.log(`Applied site icon ${iconUrl} to Android launcher resources`);
+  console.log('Generated adaptive icons with light background (#FFF0F5)');
 }
 
 main().catch((error) => {
