@@ -7,7 +7,8 @@
         "cap:add:android": "cap add android",
         "cap:sync": "cap sync android",
         "apply:site-icon": "node scripts/apply-site-icon.mjs",
-        "prepare:android": "node scripts/prepare-android-release.mjs"
+        "prepare:android": "node scripts/prepare-android-release.mjs",
+        "security:android": "node scripts/apply-android-security.mjs"
     },
     "dependencies": {
         "@capacitor/android": "^7.1.0",

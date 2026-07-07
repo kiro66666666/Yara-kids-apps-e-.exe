@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'release-windows-*'
+      - 'release-android-*'
+      - 'release-all-*'
   workflow_dispatch:
 
 permissions:
@@ -101,14 +103,57 @@ jobs:
         working-directory: mobile-wrapper
         run: npm run apply:site-icon
 
-      - name: Build Android APK
-        working-directory: mobile-wrapper/android
-        run: ./gradlew assembleDebug
+      - name: Apply Android network security config
+        working-directory: mobile-wrapper
+        run: npm run security:android || echo "Security config skipped (not critical)"
 
-      - name: Rename Android APK for release
+      - name: Decode Android keystore (if provided)
+        if: ${{ secrets.ANDROID_KEYSTORE != '' }}
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > mobile-wrapper/android/app/yarakids-release.keystore
+          echo "ANDROID_KEYSTORE_PATH=mobile-wrapper/android/app/yarakids-release.keystore" >> $GITHUB_ENV
+
+      - name: Build Android APK (Release)
+        working-directory: mobile-wrapper/android
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_PATH" ] && [ -n "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" ]; then
+            echo "Signing APK with provided keystore..."
+            ./gradlew assembleRelease \
+              -Pandroid.injected.signing.store.file="$ANDROID_KEYSTORE_PATH" \
+              -Pandroid.injected.signing.store.password="${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
+              -Pandroid.injected.signing.key.alias="${{ secrets.ANDROID_KEY_ALIAS }}" \
+              -Pandroid.injected.signing.key.password="${{ secrets.ANDROID_KEY_PASSWORD }}"
+          else
+            echo "No keystore provided — building unsigned release APK."
+            ./gradlew assembleRelease
+          fi
+
+      - name: Locate APK
+        shell: bash
+        run: |
+          SIGNED=$(find mobile-wrapper/android/app/build/outputs/apk/release -name 'app-release.apk' 2>/dev/null | head -1)
+          UNSIGNED=$(find mobile-wrapper/android/app/build/outputs/apk/release -name 'app-release-unsigned.apk' 2>/dev/null | head -1)
+          APK_PATH="${SIGNED:-$UNSIGNED}"
+          if [ -z "$APK_PATH" ]; then
+            echo "APK not found in release output — searching broader"
+            APK_PATH=$(find mobile-wrapper/android -name '*.apk' 2>/dev/null | head -1)
+          fi
+          if [ -z "$APK_PATH" ]; then
+            echo "ERROR: No APK found!"
+            ls -la mobile-wrapper/android/app/build/outputs/apk/ 2>/dev/null || true
+            exit 1
+          fi
+          echo "APK_PATH=$APK_PATH" >> $GITHUB_ENV
+          echo "Found APK at: $APK_PATH"
+
+      - name: Copy APK to release assets
         run: |
           mkdir -p release-assets/android
-          cp mobile-wrapper/android/app/build/outputs/apk/debug/app-debug.apk "release-assets/android/YARA-Kids.apk"
+          cp "${{ env.APK_PATH }}" "release-assets/android/YARA-Kids.apk"
+          echo "APK size: $(stat -c%s 'release-assets/android/YARA-Kids.apk') bytes"
 
       - name: Upload Android artifact
         uses: actions/upload-artifact@v4
@@ -194,8 +239,22 @@ jobs:
           manifest_path.write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
           PY
 
+      - name: Generate APK checksum
+        shell: bash
+        run: |
+          APK_PATH="release-assets/android/YARA-Kids.apk"
+          if [ -f "$APK_PATH" ]; then
+            SHA256=$(sha256sum "$APK_PATH" | awk '{print $1}')
+            SIZE=$(stat -c%s "$APK_PATH")
+            echo "APK SHA256: $SHA256"
+            echo "APK Size: $SIZE bytes"
+            echo "$SHA256" > "release-assets/android/YARA-Kids.apk.sha256"
+          else
+            echo "No APK found at $APK_PATH — skipping checksum"
+          fi
+
       - name: Publish release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: native-wrapper-build-${{ github.run_number }}
           name: YARA Kids Native Wrappers v${{ steps.version.outputs.value }} (build ${{ github.run_number }})
@@ -203,4 +262,5 @@ jobs:
           files: |
             release-assets/windows/YARA-Kids-Setup.exe
             release-assets/windows/YARA-Kids.windows.manifest.json
-            release-assets/android/*.apk
+            release-assets/android/YARA-Kids.apk
+            release-assets/android/YARA-Kids.apk.sha256
